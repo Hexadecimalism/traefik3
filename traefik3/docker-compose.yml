@@ -1,0 +1,74 @@
+version: "1.0"
+
+secrets:
+  cloudflare-token:
+    file: "./data/secrets/cloudf_dns_api_token.secret"
+  cloudflare-email:
+    file: "./data/secrets/email.secret"
+
+services:
+  traefik:
+    image: traefik:latest
+    container_name: traefik
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - proxy
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./data/traefik.yml:/traefik.yml:ro
+      - ./data/acme.json:/acme.json
+      - ./data/config.yml:/config.yml:ro
+     labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.entrypoints=http"
+      - "traefik.http.routers.traefik.rule=Host(`traefik-dashboard.local.my-website.net`)"
+      - "traefik.http.middlewares.traefik-auth.basicauth.usersfile=./config/secrets/basicauthuserpass.secret"
+      - "traefik.http.middlewares.traefik-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.sslheader.headers.customrequestheaders.X-Forwarded-Proto=https"
+      - "traefik.http.routers.traefik.middlewares=traefik-https-redirect"
+      - "traefik.http.routers.traefik-secure.entrypoints=https"
+      - "traefik.http.routers.traefik-secure.rule=Host(`traefik-dashboard.local.my-website.net`)"
+      - "traefik.http.routers.traefik-secure.middlewares=traefik-auth"
+      - "traefik.http.routers.traefik-secure.tls=true"
+      - "traefik.http.routers.traefik-secure.tls.certresolver=cloudflare"
+      - "traefik.http.routers.traefik-secure.tls.domains[0].main=local.my-website.net"
+      - "traefik.http.routers.traefik-secure.tls.domains[0].sans=*.local.my-website.net"
+      - "traefik.http.routers.traefik-secure.service=api@internal"  
+    # command:
+      # - "--log.level=DEBUG"
+      # - --providers.docker=true
+      # - --providers.docker.exposedbydefault=false
+      # - --api.dashboard=false
+#      Set up LetsEncrypt certificate resolver
+      # - --certificatesresolvers.letsencrypt.acme.dnschallenge=true
+      # - --certificatesresolvers.letsencrypt.acme.dnschallenge.provider=cloudflare
+      # - --certificatesResolvers.letsencrypt.acme.dnschallenge.resolvers=1.1.1.1:53,1.0.0.1:53
+      # - --certificatesResolvers.letsencrypt.acme.dnschallenge.delayBeforeCheck=20
+
+      # - --certificatesresolvers.letsencrypt.acme.email=your-le-email@domain.com
+      # - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+#      staging environment of LE, remove for real certs
+      # - --certificatesresolvers.letsencrypt.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory
+#      Set up an insecure listener that redirects all traffic to TLS
+      # - --entrypoints.web.address=:80
+      # - --entrypoints.websecure.address=:443
+      # - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      # - --entrypoints.web.http.redirections.entrypoint.scheme=https
+#      Set up the TLS configuration for our websecure listener
+      # - --entrypoints.websecure.http.tls=true
+      # - --entrypoints.websecure.http.tls.certResolver=letsencrypt
+      # - --entrypoints.websecure.http.tls.domains[0].main=sub.domain.com
+      # - --entrypoints.websecure.http.tls.domains[0].sans=*.sub.domain.com
+    secrets:
+      - "cloudflare-token"
+      - "cloudflare-email"
+      
+networks:
+  proxy:
+    external: true     
